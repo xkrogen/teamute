@@ -1,0 +1,8 @@
+.build/
+build/
+dist/
+Teamute/Teamute.iconset/
+Teamute/Teamute.icns
+diagnostics/
+teams-macos-accessibility-handoff.md
+todo.md

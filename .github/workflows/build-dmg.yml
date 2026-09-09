@@ -1,0 +1,29 @@
+name: Build DMG
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  dmg:
+    runs-on: macos-14
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build unsigned app
+        run: |
+          mkdir -p build/Teamute.app/Contents/MacOS build/Teamute.app/Contents/Resources
+          cp Teamute/Info.plist build/Teamute.app/Contents/Info.plist
+          cp icon.png build/Teamute.app/Contents/Resources/icon.png
+          swiftc -parse-as-library -framework AppKit -framework ApplicationServices -framework Carbon -framework CoreGraphics -framework ServiceManagement Teamute/Teamute.swift -o build/Teamute.app/Contents/MacOS/Teamute
+          build/Teamute.app/Contents/MacOS/Teamute --self-test
+      - name: Package DMG
+        run: |
+          mkdir -p dist
+          hdiutil create -volname Teamute -srcfolder build/Teamute.app -ov -format UDZO dist/Teamute-unsigned.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Teamute-unsigned-dmg
+          path: dist/Teamute-unsigned.dmg
