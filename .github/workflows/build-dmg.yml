@@ -16,7 +16,7 @@ jobs:
         run: |
           mkdir -p build/Teamute.app/Contents/MacOS build/Teamute.app/Contents/Resources
           cp Teamute/Info.plist build/Teamute.app/Contents/Info.plist
-          cp icon.png build/Teamute.app/Contents/Resources/icon.png
+          cp Teamute/Teamute.icns build/Teamute.app/Contents/Resources/Teamute.icns
           swiftc -parse-as-library -framework AppKit -framework ApplicationServices -framework Carbon -framework CoreGraphics -framework ServiceManagement Teamute/Teamute.swift -o build/Teamute.app/Contents/MacOS/Teamute
           build/Teamute.app/Contents/MacOS/Teamute --self-test
       - name: Package DMG

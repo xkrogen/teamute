@@ -21,7 +21,7 @@ fi
 mkdir -p "$stage_app/Contents/MacOS" "$module_cache"
 cp "$script_dir/Teamute/Info.plist" "$stage_app/Contents/Info.plist"
 mkdir -p "$stage_app/Contents/Resources"
-cp "$script_dir/icon.png" "$stage_app/Contents/Resources/icon.png"
+cp "$script_dir/Teamute/Teamute.icns" "$stage_app/Contents/Resources/Teamute.icns"
 swiftc -parse-as-library -Xcc "-fmodules-cache-path=$module_cache" \
   -framework AppKit -framework ApplicationServices -framework Carbon -framework CoreGraphics \
   "$script_dir/Teamute/Teamute.swift" -o "$binary_path"
