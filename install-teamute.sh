@@ -7,6 +7,19 @@ destination="/Applications/Teamute.app"
 staging="/Applications/.Teamute.app.teamute-staging"
 expected_bundle_id="local.teamute.app"
 
+# An app bundle can be replaced while its old executable remains running.
+# Stop only Teamute at this exact installed path before updating, so a later
+# `open -a` cannot merely activate stale in-memory UI.
+running_pids=$(/bin/ps -ax -o pid=,command= | /usr/bin/awk '$2 == "/Applications/Teamute.app/Contents/MacOS/Teamute" {print $1}')
+if [[ -n "$running_pids" ]]; then
+  kill -TERM ${(z)running_pids}
+  for _ in {1..30}; do
+    sleep 0.1
+    still_running=$(/bin/ps -ax -o command= | /usr/bin/grep -Fx "/Applications/Teamute.app/Contents/MacOS/Teamute" || true)
+    [[ -z "$still_running" ]] && break
+  done
+fi
+
 [[ -d "$source_app" ]] || { echo "Build Teamute first with ./build-teamute.sh" >&2; exit 1; }
 codesign --verify --deep --strict "$source_app"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$source_app/Contents/Info.plist")" == "$expected_bundle_id" ]] || {
