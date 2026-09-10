@@ -39,8 +39,11 @@ Teams call. Run them only when authorized to control that call.
 
 ## Development and release
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). GitHub Actions builds an unsigned DMG
-artifact. Production release signing and notarization are separate macOS steps.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Pull requests and branch pushes build
+an unsigned test DMG only. Public releases are tag-gated, signed with a
+Developer ID Application certificate, notarized, stapled, and attached to a
+GitHub Release. The required secrets and one-time setup are documented in
+[distribution.md](docs/distribution.md).
 
 ## License
 

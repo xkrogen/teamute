@@ -2,8 +2,17 @@ name: Build DMG
 
 on:
   push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
   pull_request:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing vX.Y.Z tag to release
+        required: true
+        type: string
 
 jobs:
   dmg:
@@ -27,3 +36,77 @@ jobs:
         with:
           name: Teamute-unsigned-dmg
           path: dist/Teamute-unsigned.dmg
+
+  release:
+    # A release is impossible before the notarization job succeeds.
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    needs: dmg
+    runs-on: macos-14
+    environment: release
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ inputs.tag || github.ref_name }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate release tag
+        id: release
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+          REF: ${{ github.ref }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]] || { echo "Release tag must be vX.Y.Z" >&2; exit 2; }
+          [[ "$REF" == "refs/tags/$TAG" ]] || { echo "Release dispatch must run from its matching tag ref" >&2; exit 2; }
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          tag_commit="$(git rev-parse "refs/tags/$TAG^{commit}")"
+          git checkout --detach "$tag_commit"
+          [[ "$(git rev-parse HEAD)" == "$tag_commit" ]] || { echo "Failed to check out release tag" >&2; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Import Developer ID certificate
+        env:
+          P12_BASE64: ${{ secrets.TEAMUTE_DEVELOPER_ID_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.TEAMUTE_DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          [[ -n "$P12_BASE64" && -n "$P12_PASSWORD" ]] || { echo "Missing Developer ID release secrets" >&2; exit 2; }
+          keychain="$RUNNER_TEMP/teamute-release.keychain-db"
+          p12="$RUNNER_TEMP/teamute-release.p12"
+          echo "$P12_BASE64" | base64 --decode > "$p12"
+          security create-keychain -p "$P12_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$P12_PASSWORD" "$keychain"
+          security import "$p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$P12_PASSWORD" "$keychain"
+          rm -f "$p12"
+      - name: Build, notarize, and validate DMG
+        env:
+          TEAMUTE_NOTARY_KEY_ID: ${{ secrets.TEAMUTE_NOTARY_KEY_ID }}
+          TEAMUTE_NOTARY_ISSUER_ID: ${{ secrets.TEAMUTE_NOTARY_ISSUER_ID }}
+          NOTARY_KEY_BASE64: ${{ secrets.TEAMUTE_NOTARY_KEY_BASE64 }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          [[ -n "$TEAMUTE_NOTARY_KEY_ID" && -n "$TEAMUTE_NOTARY_ISSUER_ID" && -n "$NOTARY_KEY_BASE64" ]] || { echo "Missing notarization release secrets" >&2; exit 2; }
+          key="$RUNNER_TEMP/AuthKey_${TEAMUTE_NOTARY_KEY_ID}.p8"
+          trap 'rm -f "$key"; security delete-keychain "$RUNNER_TEMP/teamute-release.keychain-db" || true' EXIT
+          echo "$NOTARY_KEY_BASE64" | base64 --decode > "$key"
+          chmod 600 "$key"
+          TEAMUTE_KEYCHAIN="$RUNNER_TEMP/teamute-release.keychain-db" zsh scripts/release-dmg.sh "$TAG"
+          TEAMUTE_NOTARY_KEY="$key" zsh scripts/notarize-dmg.sh "dist/Teamute-${TAG#v}.dmg"
+      - name: Remove release credentials
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP"/AuthKey_*.p8 "$RUNNER_TEMP/teamute-release.p12"
+          security delete-keychain "$RUNNER_TEMP/teamute-release.keychain-db" || true
+      - name: Publish notarized GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          dmg="dist/Teamute-${TAG#v}.dmg"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$dmg" --clobber
+          else
+            gh release create "$TAG" "$dmg" --title "Teamute ${TAG#v}" --generate-notes
+          fi
