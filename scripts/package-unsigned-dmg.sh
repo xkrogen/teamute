@@ -35,5 +35,5 @@ dmg="$repo_root/dist/Teamute-${version}-macOS-unsigned.dmg"
 checksum="$dmg.sha256"
 rm -f "$dmg" "$checksum"
 hdiutil create -volname "Teamute ${version} (unsigned)" -srcfolder "$app" -ov -format UDZO "$dmg" >/dev/null
-shasum -a 256 "$dmg" > "$checksum"
+(cd "$dmg:h" && shasum -a 256 "$dmg:t" > "$checksum:t")
 print "$dmg"
