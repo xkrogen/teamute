@@ -42,7 +42,8 @@ Teams call. Run them only when authorized to control that call.
 See [CONTRIBUTING.md](CONTRIBUTING.md). Pull requests and branch pushes build
 an unsigned test DMG only. Publishing a GitHub Release from an exact matching
 `vX.Y.Z` tag builds and attaches an unsigned DMG plus SHA-256 file. Public
-DMGs are not Developer ID signed and are not notarized; see
+DMGs carry only an ad-hoc local signature, are not Developer ID signed, and
+are not notarized; see
 [distribution.md](docs/distribution.md) before opening one.
 
 ## License

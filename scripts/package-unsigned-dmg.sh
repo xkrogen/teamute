@@ -27,9 +27,9 @@ swiftc -parse-as-library \
   -framework CoreGraphics -framework ServiceManagement \
   "$repo_root/Teamute/Teamute.swift" -o "$app/Contents/MacOS/Teamute"
 "$app/Contents/MacOS/Teamute" --self-test
-# Recent macOS toolchains can add an ad-hoc signature to swiftc output. Strip
-# it so the public artifact is genuinely unsigned, not merely non-Developer-ID.
-codesign --remove-signature "$app"
+# This is deliberately an ad-hoc signature: it lets macOS execute the app on
+# Apple silicon but carries no Developer ID identity and is not notarized.
+codesign --force --sign - "$app"
 
 dmg="$repo_root/dist/Teamute-${version}-macOS-unsigned.dmg"
 checksum="$dmg.sha256"

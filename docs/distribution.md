@@ -1,7 +1,9 @@
 # GitHub distribution (unsigned)
 
-Teamute’s public GitHub-release DMGs are **unsigned**: they are not Developer
-ID signed and are not notarized. This is a zero-cost distribution path, not a
+Teamute’s public GitHub-release DMGs are labeled **unsigned** because they are
+not Developer ID signed and are not notarized. They contain only an ad-hoc
+local signature so Apple-silicon Macs can execute them; it establishes no
+verified developer identity. This is a zero-cost distribution path, not a
 trust guarantee. Download only from this repository and make your own decision
 before overriding a macOS warning.
 

@@ -28,9 +28,9 @@ jobs:
           cp Teamute/Teamute.icns build/Teamute.app/Contents/Resources/Teamute.icns
           swiftc -parse-as-library -framework AppKit -framework ApplicationServices -framework Carbon -framework CoreGraphics -framework ServiceManagement Teamute/Teamute.swift -o build/Teamute.app/Contents/MacOS/Teamute
           build/Teamute.app/Contents/MacOS/Teamute --self-test
-          # Do not let swiftc's possible ad-hoc signature turn this into a
-          # misleadingly labeled test artifact.
-          codesign --remove-signature build/Teamute.app
+          # Keep only a local ad-hoc signature so Apple-silicon Macs can run
+          # the test artifact; it is neither Developer ID signed nor notarized.
+          codesign --force --sign - build/Teamute.app
       - name: Package unsigned test DMG
         run: |
           mkdir -p dist
