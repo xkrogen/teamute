@@ -4,9 +4,9 @@ on:
   push:
     branches:
       - '**'
-    tags:
-      - 'v*'
   pull_request:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -21,14 +21,17 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Build unsigned app
+      - name: Build unsigned test app
         run: |
           mkdir -p build/Teamute.app/Contents/MacOS build/Teamute.app/Contents/Resources
           cp Teamute/Info.plist build/Teamute.app/Contents/Info.plist
           cp Teamute/Teamute.icns build/Teamute.app/Contents/Resources/Teamute.icns
           swiftc -parse-as-library -framework AppKit -framework ApplicationServices -framework Carbon -framework CoreGraphics -framework ServiceManagement Teamute/Teamute.swift -o build/Teamute.app/Contents/MacOS/Teamute
           build/Teamute.app/Contents/MacOS/Teamute --self-test
-      - name: Package DMG
+          # Do not let swiftc's possible ad-hoc signature turn this into a
+          # misleadingly labeled test artifact.
+          codesign --remove-signature build/Teamute.app
+      - name: Package unsigned test DMG
         run: |
           mkdir -p dist
           hdiutil create -volname Teamute -srcfolder build/Teamute.app -ov -format UDZO dist/Teamute-unsigned.dmg
@@ -38,15 +41,13 @@ jobs:
           path: dist/Teamute-unsigned.dmg
 
   release:
-    # A release is impossible before the notarization job succeeds.
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-    needs: dmg
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     runs-on: macos-14
     environment: release
     permissions:
       contents: write
     concurrency:
-      group: release-${{ inputs.tag || github.ref_name }}
+      group: release-${{ github.event.release.tag_name || inputs.tag }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -55,7 +56,7 @@ jobs:
       - name: Validate release tag
         id: release
         env:
-          TAG: ${{ inputs.tag || github.ref_name }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
           REF: ${{ github.ref }}
         run: |
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]] || { echo "Release tag must be vX.Y.Z" >&2; exit 2; }
@@ -64,49 +65,23 @@ jobs:
           tag_commit="$(git rev-parse "refs/tags/$TAG^{commit}")"
           git checkout --detach "$tag_commit"
           [[ "$(git rev-parse HEAD)" == "$tag_commit" ]] || { echo "Failed to check out release tag" >&2; exit 1; }
+          version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Teamute/Info.plist)"
+          [[ "$TAG" == "v$version" ]] || { echo "Tag $TAG does not match app version $version" >&2; exit 2; }
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-      - name: Import Developer ID certificate
+      - name: Build unsigned release DMG
         env:
-          P12_BASE64: ${{ secrets.TEAMUTE_DEVELOPER_ID_P12_BASE64 }}
-          P12_PASSWORD: ${{ secrets.TEAMUTE_DEVELOPER_ID_P12_PASSWORD }}
-        run: |
-          [[ -n "$P12_BASE64" && -n "$P12_PASSWORD" ]] || { echo "Missing Developer ID release secrets" >&2; exit 2; }
-          keychain="$RUNNER_TEMP/teamute-release.keychain-db"
-          p12="$RUNNER_TEMP/teamute-release.p12"
-          echo "$P12_BASE64" | base64 --decode > "$p12"
-          security create-keychain -p "$P12_PASSWORD" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$P12_PASSWORD" "$keychain"
-          security import "$p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$P12_PASSWORD" "$keychain"
-          rm -f "$p12"
-      - name: Build, notarize, and validate DMG
-        env:
-          TEAMUTE_NOTARY_KEY_ID: ${{ secrets.TEAMUTE_NOTARY_KEY_ID }}
-          TEAMUTE_NOTARY_ISSUER_ID: ${{ secrets.TEAMUTE_NOTARY_ISSUER_ID }}
-          NOTARY_KEY_BASE64: ${{ secrets.TEAMUTE_NOTARY_KEY_BASE64 }}
           TAG: ${{ steps.release.outputs.tag }}
         run: |
-          [[ -n "$TEAMUTE_NOTARY_KEY_ID" && -n "$TEAMUTE_NOTARY_ISSUER_ID" && -n "$NOTARY_KEY_BASE64" ]] || { echo "Missing notarization release secrets" >&2; exit 2; }
-          key="$RUNNER_TEMP/AuthKey_${TEAMUTE_NOTARY_KEY_ID}.p8"
-          trap 'rm -f "$key"; security delete-keychain "$RUNNER_TEMP/teamute-release.keychain-db" || true' EXIT
-          echo "$NOTARY_KEY_BASE64" | base64 --decode > "$key"
-          chmod 600 "$key"
-          TEAMUTE_KEYCHAIN="$RUNNER_TEMP/teamute-release.keychain-db" zsh scripts/release-dmg.sh "$TAG"
-          TEAMUTE_NOTARY_KEY="$key" zsh scripts/notarize-dmg.sh "dist/Teamute-${TAG#v}.dmg"
-      - name: Remove release credentials
-        if: always()
-        run: |
-          rm -f "$RUNNER_TEMP"/AuthKey_*.p8 "$RUNNER_TEMP/teamute-release.p12"
-          security delete-keychain "$RUNNER_TEMP/teamute-release.keychain-db" || true
-      - name: Publish notarized GitHub Release
+          zsh scripts/package-unsigned-dmg.sh "$TAG"
+      - name: Attach unsigned DMG to the published GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
         run: |
-          dmg="dist/Teamute-${TAG#v}.dmg"
+          dmg="dist/Teamute-${TAG#v}-macOS-unsigned.dmg"
+          checksum="$dmg.sha256"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$dmg" --clobber
+            gh release upload "$TAG" "$dmg" "$checksum" --clobber
           else
-            gh release create "$TAG" "$dmg" --title "Teamute ${TAG#v}" --generate-notes
+            gh release create "$TAG" "$dmg" "$checksum" --title "Teamute ${TAG#v} (unsigned)" --notes "This DMG is unsigned: it is not Developer ID signed and is not notarized. See docs/distribution.md before opening."
           fi

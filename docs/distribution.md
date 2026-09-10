@@ -1,49 +1,31 @@
-# Direct distribution
+# GitHub distribution (unsigned)
 
-Teamute is distributed directly as a notarized DMG. It is not on the Mac App
-Store roadmap.
+Teamute’s public GitHub-release DMGs are **unsigned**: they are not Developer
+ID signed and are not notarized. This is a zero-cost distribution path, not a
+trust guarantee. Download only from this repository and make your own decision
+before overriding a macOS warning.
 
-## One-time owner setup
+## Publishing a release
 
-1. An Apple Developer Program Account Holder creates a **Developer ID
-   Application** certificate. Do not use an Apple Development certificate for
-   releases.
-2. Create an Apple notarization API key. Keep the `.p8` key private.
-3. The repository’s `release` environment is restricted to `v*` tags. Add
-   required reviewers in GitHub before storing production credentials, then
-   add these environment secrets:
+Set `CFBundleShortVersionString`, then create a GitHub Release whose tag exactly
+matches it as `vX.Y.Z`. Publishing that release starts the release workflow; it
+checks out that tag, verifies the tag/version match, builds
+`Teamute-X.Y.Z-macOS-unsigned.dmg`, creates its SHA-256 sidecar, and uploads
+both to the existing release. No Apple account, certificate, notarization
+credential, or repository secret is used.
 
-   - `TEAMUTE_DEVELOPER_ID_P12_BASE64`
-   - `TEAMUTE_DEVELOPER_ID_P12_PASSWORD`
-   - `TEAMUTE_NOTARY_KEY_BASE64`
-   - `TEAMUTE_NOTARY_KEY_ID`
-   - `TEAMUTE_NOTARY_ISSUER_ID`
+For a draft, publish it only when ready to start the build. Re-publishing an
+already published release does not re-run the workflow. A maintainer can also
+run the workflow manually **from the exact existing tag** and enter that same
+tag; it will attach or replace the two assets.
 
-   Exporting a signing key and adding these secrets is an owner action. Never
-   commit a certificate, private key, keychain, API key, or notarization
-   profile.
+## Opening a download
 
-## Release process
+1. Download the DMG and its `.sha256` file from the GitHub Release, then run
+   `shasum -a 256 -c Teamute-X.Y.Z-macOS-unsigned.dmg.sha256` in that folder.
+2. If macOS blocks the app, verify that you trust the repository and download.
+   Then use **System Settings → Privacy & Security → Open Anyway** and confirm
+   Open. Apple documents this flow in [Safely open apps on your
+   Mac](https://support.apple.com/en-la/102445).
 
-Set `CFBundleShortVersionString` before creating a matching `vX.Y.Z` tag. Push
-that tag to release, or manually dispatch the workflow **from that same tag**
-and enter the same tag value. The release workflow verifies and checks out the
-tag before it accesses credentials, imports credentials into a temporary
-keychain, builds a Developer ID-signed app with hardened runtime and an empty
-production entitlement set, and requires a secure timestamp. It notarizes the
-DMG, staples and validates its ticket, checks Gatekeeper, and only then creates
-the GitHub Release.
-
-For a local release candidate:
-
-```sh
-zsh scripts/release-dmg.sh v0.1.0
-TEAMUTE_NOTARY_PROFILE=your-keychain-profile zsh scripts/notarize-dmg.sh dist/Teamute-0.1.0.dmg
-```
-
-Use a clean Mac or a quarantined download for final installation testing.
-
-Apple requires a Developer ID signature, hardened runtime, a secure timestamp,
-and no enabled `get-task-allow` entitlement for notarization. See [Apple’s
-notarization guide](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) and [custom workflow
-guide](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
+Do not disable Gatekeeper or remove quarantine attributes to open Teamute.
