@@ -44,6 +44,9 @@ and sends Teams’ advertised in-app shortcuts only to the detected Teams PID.
 It uses no network service, Teams token, Apple Events, private API, screen
 recording, system-microphone control, or global keyboard injection. Each
 transition is read back from Teams before it is shown as successful.
+When Teams exposes one compact call popup beside one full-size meeting-control
+window, Teamute uses the popup as the authoritative state reader; additional
+eligible meeting-control windows remain unavailable rather than guessed.
 
 ## Development
 
