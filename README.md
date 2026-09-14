@@ -47,6 +47,9 @@ transition is read back from Teams before it is shown as successful.
 When Teams exposes one compact call popup beside one full-size meeting-control
 window, Teamute uses the popup as the authoritative state reader; additional
 eligible meeting-control windows remain unavailable rather than guessed.
+If that compact popup is minimized, Teamute briefly restores it only after a
+Teamute-initiated toggle to confirm the result, then minimizes it again. It
+does not continuously refresh externally changed hidden-call state.
 
 ## Development
 
