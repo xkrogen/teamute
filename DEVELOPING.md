@@ -34,6 +34,16 @@ Teams call. Run them only on a call you are authorized to control and confirm
 the starting state before use. `--render-settings` writes a local settings-view
 render for UI review.
 
+### Shortcut compatibility
+
+Teams can advertise call shortcuts through Accessibility as either symbols
+(`⇧ ⌘ M`) or named modifiers (`Shift+Command+M`). Teamute accepts both forms
+with exactly Shift and Command, for microphone M and camera O. The shortcut
+regression checks are included in `--self-test`. A readable call toolbar can
+otherwise appear inactive when a Teams update changes the shortcut format.
+
+The repository retains its existing `main` branch for maintenance.
+
 ## Contributing
 
 Keep changes focused and private by design. Do not add Teams credentials,
